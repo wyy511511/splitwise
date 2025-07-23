@@ -179,7 +179,13 @@
         options: {
           indexAxis: 'y',
           plugins: {
-            title: { display: true, text: 'Per-Transaction Contribution (Stacked)' },
+            title: {
+              display: true,
+              text: [
+                'Per-Transaction Contribution (Stacked)',
+                'Note: Each Tx represents how the amount was split among people, not one-to-one payments.'
+              ]
+            },
             tooltip: { mode: 'index', intersect: false },
           },
           responsive: true,
