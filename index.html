@@ -37,6 +37,9 @@
     <label>Participants (AA):<br />
       <div id="participants"></div>
     </label>
+    <label>Note:
+      <input id="note" type="text" placeholder="e.g. Dinner, Taxi..." />
+    </label>
     <button onclick="addTransaction()">Add</button>
   </div>
 
@@ -101,6 +104,7 @@
     function addTransaction() {
       const payer = parseInt(document.getElementById('payer').value);
       const amount = parseFloat(document.getElementById('amount').value);
+      const note = document.getElementById('note').value.trim();
       const participants = [];
       members.forEach((_, i) => {
         if (document.getElementById(`check-${i}`).checked) participants.push(i);
@@ -109,7 +113,7 @@
         alert('Invalid transaction');
         return;
       }
-      transactions.push({ payer, amount, participants });
+      transactions.push({ payer, amount, participants, note });
       renderTransactions();
     }
 
@@ -119,7 +123,8 @@
       transactions.forEach((t, i) => {
         const row = document.createElement('div');
         row.className = 'transaction-row';
-        row.textContent = `${members[t.payer]} paid $${t.amount.toFixed(2)} for ${t.participants.map(p => members[p]).join(', ')}`;
+        row.textContent = `${members[t.payer]} paid $${t.amount.toFixed(2)} for ${t.participants.map(p => members[p]).join(', ')}` +
+                          (t.note ? ` [${t.note}]` : '');
         tDiv.appendChild(row);
       });
     }
@@ -127,12 +132,14 @@
     function calculateBalances() {
       const balances = Array(members.length).fill(0);
       const barMap = Array.from({ length: members.length }, () => []);
+      const consumption = Array(members.length).fill(0);
 
       transactions.forEach(({ payer, amount, participants }) => {
         const share = amount / participants.length;
         participants.forEach(p => {
           balances[p] -= share;
           barMap[p].push(-share);
+          consumption[p] += share;
         });
         balances[payer] += amount;
         barMap[payer].push(amount);
@@ -152,7 +159,7 @@
       resultDiv.innerHTML += link;
 
       drawHorizontalChart(barMap);
-      drawPieChart(balances);
+      drawPieChart(consumption);
     }
 
     function drawHorizontalChart(barMap) {
@@ -184,7 +191,7 @@
       });
     }
 
-    function drawPieChart(balances) {
+    function drawPieChart(consumption) {
       const ctx = document.getElementById('pieChart').getContext('2d');
       if (pieChart) pieChart.destroy();
       pieChart = new Chart(ctx, {
@@ -192,13 +199,13 @@
         data: {
           labels: members,
           datasets: [{
-            data: balances.map(b => Math.abs(b)),
+            data: consumption,
             backgroundColor: members.map((_, i) => `hsl(${i * 60}, 70%, 60%)`)
           }]
         },
         options: {
           plugins: {
-            title: { display: true, text: 'Absolute Final Balance Share' }
+            title: { display: true, text: 'Actual Amount Each Person Consumed (AA)' }
           }
         }
       });
