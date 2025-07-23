@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Splitwise-like AA Calculator</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; max-width: 800px; margin: auto; }
+    input, select, button { margin: 5px; padding: 5px; }
+    .transaction-row { margin: 10px 0; border-bottom: 1px solid #ccc; padding-bottom: 5px; }
+    .flex { display: flex; gap: 10px; flex-wrap: wrap; }
+    .balance { margin-top: 20px; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <h1>Splitwise-like AA Calculator</h1>
+
+  <label>Group Size:
+    <input id="groupSize" type="number" value="3" min="1" />
+  </label>
+  <button onclick="initGroup()">Initialize Group</button>
+
+  <div id="groupMembers"></div>
+
+  <h2>Add Transaction</h2>
+  <div class="flex">
+    <label>Payer:
+      <select id="payer"></select>
+    </label>
+    <label>Amount:
+      <input id="amount" type="number" step="0.01" />
+    </label>
+    <label>Participants (AA):<br />
+      <div id="participants"></div>
+    </label>
+    <button onclick="addTransaction()">Add</button>
+  </div>
+
+  <h3>Transactions</h3>
+  <div id="transactions"></div>
+
+  <button onclick="calculateBalances()">Calculate Balances</button>
+
+  <div id="results" class="balance"></div>
+
+  <script>
+    let members = [];
+    let transactions = [];
+
+    function initGroup() {
+      const n = parseInt(document.getElementById('groupSize').value);
+      members = Array.from({ length: n }, (_, i) => `Person ${i + 1}`);
+      updateMemberUI();
+    }
+
+    function updateMemberUI() {
+      const payerSel = document.getElementById('payer');
+      const participantsDiv = document.getElementById('participants');
+      payerSel.innerHTML = '';
+      participantsDiv.innerHTML = '';
+      members.forEach((name, i) => {
+        const opt = document.createElement('option');
+        opt.value = i;
+        opt.textContent = name;
+        payerSel.appendChild(opt);
+
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.value = i;
+        checkbox.id = `check-${i}`;
+        participantsDiv.appendChild(checkbox);
+        participantsDiv.appendChild(document.createTextNode(name));
+        participantsDiv.appendChild(document.createElement('br'));
+      });
+    }
+
+    function addTransaction() {
+      const payer = parseInt(document.getElementById('payer').value);
+      const amount = parseFloat(document.getElementById('amount').value);
+      const participants = [];
+      members.forEach((_, i) => {
+        if (document.getElementById(`check-${i}`).checked) participants.push(i);
+      });
+      if (participants.length === 0 || isNaN(amount)) {
+        alert('Invalid transaction');
+        return;
+      }
+      transactions.push({ payer, amount, participants });
+      renderTransactions();
+    }
+
+    function renderTransactions() {
+      const tDiv = document.getElementById('transactions');
+      tDiv.innerHTML = '';
+      transactions.forEach((t, i) => {
+        const row = document.createElement('div');
+        row.className = 'transaction-row';
+        row.textContent = `${members[t.payer]} paid $${t.amount.toFixed(2)} for ${t.participants.map(p => members[p]).join(', ')}`;
+        tDiv.appendChild(row);
+      });
+    }
+
+    function calculateBalances() {
+      const balances = Array(members.length).fill(0);
+      transactions.forEach(({ payer, amount, participants }) => {
+        const share = amount / participants.length;
+        participants.forEach(p => {
+          balances[p] -= share;
+        });
+        balances[payer] += amount;
+      });
+
+      const resultDiv = document.getElementById('results');
+      resultDiv.innerHTML = '<h3>Final Balances:</h3>' +
+        balances.map((b, i) => `${members[i]}: $${b.toFixed(2)}`).join('<br>');
+
+      const pairs = minimizeTransactions(balances);
+      resultDiv.innerHTML += '<h3>Suggested Payments:</h3>' +
+        pairs.map(([from, to, amt]) => `${members[from]} pays ${members[to]}: $${amt.toFixed(2)}`).join('<br>');
+
+      const encoded = encodeURIComponent(JSON.stringify({ members, transactions }));
+      const url = `${location.origin}${location.pathname}?data=${encoded}`;
+      const link = `<p>Shareable URL: <a href="${url}" target="_blank">${url}</a></p>`;
+      resultDiv.innerHTML += link;
+    }
+
+    function minimizeTransactions(balances) {
+      const pos = [], neg = [];
+      balances.forEach((bal, i) => {
+        if (bal > 0.01) pos.push([i, bal]);
+        else if (bal < -0.01) neg.push([i, -bal]);
+      });
+      const result = [];
+      let i = 0, j = 0;
+      while (i < neg.length && j < pos.length) {
+        const minAmt = Math.min(neg[i][1], pos[j][1]);
+        result.push([neg[i][0], pos[j][0], minAmt]);
+        neg[i][1] -= minAmt;
+        pos[j][1] -= minAmt;
+        if (neg[i][1] < 0.01) i++;
+        if (pos[j][1] < 0.01) j++;
+      }
+      return result;
+    }
+
+    function loadFromURL() {
+      const params = new URLSearchParams(location.search);
+      if (params.has('data')) {
+        try {
+          const data = JSON.parse(decodeURIComponent(params.get('data')));
+          members = data.members;
+          transactions = data.transactions;
+          document.getElementById('groupSize').value = members.length;
+          updateMemberUI();
+          renderTransactions();
+        } catch (e) {
+          console.error('Failed to load data from URL', e);
+        }
+      }
+    }
+
+    window.onload = loadFromURL;
+  </script>
+</body>
+</html>
+
