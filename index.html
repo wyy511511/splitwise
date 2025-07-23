@@ -48,11 +48,12 @@
   <div id="results" class="balance"></div>
 
   <canvas id="horizontalChart"></canvas>
+  <canvas id="pieChart"></canvas>
 
   <script>
     let members = [];
     let transactions = [];
-    let horizontalChart;
+    let horizontalChart, pieChart;
 
     function createNameInputs() {
       const container = document.getElementById('nameInputs');
@@ -125,12 +126,16 @@
 
     function calculateBalances() {
       const balances = Array(members.length).fill(0);
+      const barMap = Array.from({ length: members.length }, () => []);
+
       transactions.forEach(({ payer, amount, participants }) => {
         const share = amount / participants.length;
         participants.forEach(p => {
           balances[p] -= share;
+          barMap[p].push(-share);
         });
         balances[payer] += amount;
+        barMap[payer].push(amount);
       });
 
       const resultDiv = document.getElementById('results');
@@ -146,40 +151,54 @@
       const link = `<p>Shareable URL: <a href="${url}" target="_blank">${url}</a></p>`;
       resultDiv.innerHTML += link;
 
-      drawHorizontalChart(balances);
+      drawHorizontalChart(barMap);
+      drawPieChart(balances);
     }
 
-    function drawHorizontalChart(balances) {
+    function drawHorizontalChart(barMap) {
       const ctx = document.getElementById('horizontalChart').getContext('2d');
-      const backgroundColors = balances.map(b => b >= 0 ? 'rgba(0,200,0,0.6)' : 'rgba(200,0,0,0.6)');
-
       if (horizontalChart) horizontalChart.destroy();
-
+      const datasets = barMap[0].map((_, i) => ({
+        label: `Tx ${i + 1}`,
+        data: barMap.map(row => row[i] || 0),
+        backgroundColor: `hsl(${i * 60}, 70%, 60%)`
+      }));
       horizontalChart = new Chart(ctx, {
         type: 'bar',
         data: {
           labels: members,
-          datasets: [{
-            label: 'Balance',
-            data: balances,
-            backgroundColor: backgroundColors,
-            borderWidth: 1,
-          }]
+          datasets
         },
         options: {
           indexAxis: 'y',
           plugins: {
-            legend: { display: false },
-            title: { display: true, text: 'Per Person Balance Breakdown' }
+            title: { display: true, text: 'Per-Transaction Contribution (Stacked)' },
+            tooltip: { mode: 'index', intersect: false },
           },
+          responsive: true,
           scales: {
-            x: {
-              grid: { zeroLineColor: 'black' },
-              title: { display: true, text: 'Amount ($)' }
-            },
-            y: {
-              ticks: { autoSkip: false }
-            }
+            x: { stacked: true },
+            y: { stacked: true }
+          }
+        }
+      });
+    }
+
+    function drawPieChart(balances) {
+      const ctx = document.getElementById('pieChart').getContext('2d');
+      if (pieChart) pieChart.destroy();
+      pieChart = new Chart(ctx, {
+        type: 'pie',
+        data: {
+          labels: members,
+          datasets: [{
+            data: balances.map(b => Math.abs(b)),
+            backgroundColor: members.map((_, i) => `hsl(${i * 60}, 70%, 60%)`)
+          }]
+        },
+        options: {
+          plugins: {
+            title: { display: true, text: 'Absolute Final Balance Share' }
           }
         }
       });
