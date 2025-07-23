@@ -18,6 +18,8 @@
   <label>Group Size:
     <input id="groupSize" type="number" value="3" min="1" />
   </label>
+  <button onclick="createNameInputs()">Customize Names</button>
+  <div id="nameInputs"></div>
   <button onclick="initGroup()">Initialize Group</button>
 
   <div id="groupMembers"></div>
@@ -47,9 +49,25 @@
     let members = [];
     let transactions = [];
 
+    function createNameInputs() {
+      const container = document.getElementById('nameInputs');
+      container.innerHTML = '';
+      const n = parseInt(document.getElementById('groupSize').value);
+      for (let i = 0; i < n; i++) {
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.placeholder = `Name ${i + 1}`;
+        input.id = `name-${i}`;
+        container.appendChild(input);
+      }
+    }
+
     function initGroup() {
       const n = parseInt(document.getElementById('groupSize').value);
-      members = Array.from({ length: n }, (_, i) => `Person ${i + 1}`);
+      members = Array.from({ length: n }, (_, i) => {
+        const val = document.getElementById(`name-${i}`)?.value?.trim();
+        return val || `Person ${i + 1}`;
+      });
       updateMemberUI();
     }
 
@@ -163,4 +181,3 @@
   </script>
 </body>
 </html>
-
