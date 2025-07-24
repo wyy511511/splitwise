@@ -21,6 +21,7 @@
     <input id="groupSize" type="number" value="3" min="1" />
   </label>
   <button onclick="createNameInputs()">Customize Names</button>
+  <button onclick="clearData()">Clear Default Data</button>
   <div id="nameInputs"></div>
   <button onclick="initGroup()">Initialize Group</button>
 
@@ -51,11 +52,12 @@
   <div id="results" class="balance"></div>
 
   <p style="font-size: 0.9em; margin-top: 12px; color: #444;">
-  <strong>Chart background colors:</strong><br>
-  <span style="background-color: rgba(200,255,200,0.3); padding: 2px 6px;">Green area (right of 0)</span>: Amount paid (you fronted)<br>
-  <span style="background-color: rgba(255,200,200,0.3); padding: 2px 6px;">Red area (left of 0)</span>: Amount you consumed (owed by you)
-</p>
-<canvas id="horizontalChart"></canvas>
+    <strong>Chart background colors:</strong><br>
+    <span style="background-color: rgba(200,255,200,0.3); padding: 2px 6px;">Green area (right of 0)</span>: Amount paid (you fronted)<br>
+    <span style="background-color: rgba(255,200,200,0.3); padding: 2px 6px;">Red area (left of 0)</span>: Amount you consumed (owed by you)
+  </p>
+
+  <canvas id="horizontalChart"></canvas>
   <canvas id="pieChart"></canvas>
 
   <script>
@@ -155,7 +157,7 @@
 
       const resultDiv = document.getElementById('results');
       resultDiv.innerHTML = '<h3>Final Balances:</h3>' +
-        balances.map((b, i) => `${members[i]}: $${b.toFixed(2)}`).join('<br>') + '</div>';
+        balances.map((b, i) => `${members[i]}: $${b.toFixed(2)}`).join('<br>');
 
       const pairs = minimizeTransactions(balances);
       resultDiv.innerHTML += '<div style="background: yellow; color: red; font-weight: bold; padding: 10px; border-radius: 6px;">💰 <strong>Suggested Payments:</strong><br>' +
@@ -171,17 +173,30 @@
     }
 
     function drawHorizontalChart(barMap) {
-      Chart.defaults.backgroundColor = 'transparent';
-      Chart.defaults.plugins.legend.position = 'bottom';
-      Chart.defaults.plugins.tooltip.backgroundColor = 'rgba(0,0,0,0.8)';
       const ctx = document.getElementById('horizontalChart').getContext('2d');
       if (horizontalChart) horizontalChart.destroy();
       if (!barMap || !barMap[0]) return;
+
       const datasets = barMap[0].map((_, i) => ({
         label: `Tx ${i + 1}`,
         data: barMap.map(row => row[i] || 0),
         backgroundColor: `hsl(${i * 60}, 70%, 60%)`
       }));
+
+      const bgPlugin = {
+        id: 'backgroundColorPlugin',
+        beforeDraw: (chart) => {
+          const {ctx, chartArea: {top, bottom, left, right}, scales} = chart;
+          const zeroX = scales.x.getPixelForValue(0);
+          ctx.save();
+          ctx.fillStyle = 'rgba(255, 200, 200, 0.3)';
+          ctx.fillRect(left, top, zeroX - left, bottom - top);
+          ctx.fillStyle = 'rgba(200, 255, 200, 0.3)';
+          ctx.fillRect(zeroX, top, right - zeroX, bottom - top);
+          ctx.restore();
+        }
+      };
+
       horizontalChart = new Chart(ctx, {
         type: 'bar',
         data: {
@@ -190,6 +205,7 @@
         },
         options: {
           indexAxis: 'y',
+          responsive: true,
           plugins: {
             title: {
               display: true,
@@ -200,12 +216,12 @@
             },
             tooltip: { mode: 'index', intersect: false },
           },
-          responsive: true,
           scales: {
             x: { stacked: true },
             y: { stacked: true }
           }
-        }
+        },
+        plugins: [bgPlugin]
       });
     }
 
@@ -246,6 +262,20 @@
         if (pos[j][1] < 0.01) j++;
       }
       return result;
+    }
+
+    function clearData() {
+      members = [];
+      transactions = [];
+      document.getElementById('groupSize').value = '';
+      document.getElementById('nameInputs').innerHTML = '';
+      document.getElementById('groupMembers').innerHTML = '';
+      document.getElementById('payer').innerHTML = '';
+      document.getElementById('participants').innerHTML = '';
+      document.getElementById('transactions').innerHTML = '';
+      document.getElementById('results').innerHTML = '';
+      if (horizontalChart) horizontalChart.destroy();
+      if (pieChart) pieChart.destroy();
     }
 
     function loadFromURL() {
