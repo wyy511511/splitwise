@@ -50,7 +50,12 @@
 
   <div id="results" class="balance"></div>
 
-  <canvas id="horizontalChart"></canvas>
+  <p style="font-size: 0.9em; margin-top: 12px; color: #444;">
+  <strong>Chart background colors:</strong><br>
+  <span style="background-color: rgba(200,255,200,0.3); padding: 2px 6px;">Green area (right of 0)</span>: Amount paid (you fronted)<br>
+  <span style="background-color: rgba(255,200,200,0.3); padding: 2px 6px;">Red area (left of 0)</span>: Amount you consumed (owed by you)
+</p>
+<canvas id="horizontalChart"></canvas>
   <canvas id="pieChart"></canvas>
 
   <script>
@@ -136,21 +141,24 @@
 
       transactions.forEach(({ payer, amount, participants }) => {
         const share = amount / participants.length;
+        members.forEach((_, i) => {
+          barMap[i].push(0);
+        });
         participants.forEach(p => {
           balances[p] -= share;
-          barMap[p].push(-share);
+          barMap[p][barMap[p].length - 1] = -share;
           consumption[p] += share;
         });
         balances[payer] += amount;
-        barMap[payer].push(amount);
+        barMap[payer][barMap[payer].length - 1] = amount;
       });
 
       const resultDiv = document.getElementById('results');
       resultDiv.innerHTML = '<h3>Final Balances:</h3>' +
-        balances.map((b, i) => `${members[i]}: $${b.toFixed(2)}`).join('<br>');
+        balances.map((b, i) => `${members[i]}: $${b.toFixed(2)}`).join('<br>') + '</div>';
 
       const pairs = minimizeTransactions(balances);
-      resultDiv.innerHTML += '<h3>Suggested Payments:</h3>' +
+      resultDiv.innerHTML += '<div style="background: yellow; color: red; font-weight: bold; padding: 10px; border-radius: 6px;">💰 <strong>Suggested Payments:</strong><br>' +
         pairs.map(([from, to, amt]) => `${members[from]} pays ${members[to]}: $${amt.toFixed(2)}`).join('<br>');
 
       const encoded = encodeURIComponent(JSON.stringify({ members, transactions }));
@@ -163,8 +171,12 @@
     }
 
     function drawHorizontalChart(barMap) {
+      Chart.defaults.backgroundColor = 'transparent';
+      Chart.defaults.plugins.legend.position = 'bottom';
+      Chart.defaults.plugins.tooltip.backgroundColor = 'rgba(0,0,0,0.8)';
       const ctx = document.getElementById('horizontalChart').getContext('2d');
       if (horizontalChart) horizontalChart.destroy();
+      if (!barMap || !barMap[0]) return;
       const datasets = barMap[0].map((_, i) => ({
         label: `Tx ${i + 1}`,
         data: barMap.map(row => row[i] || 0),
@@ -244,7 +256,12 @@
           members = data.members;
           transactions = data.transactions;
           document.getElementById('groupSize').value = members.length;
-          updateMemberUI();
+          createNameInputs();
+          members.forEach((name, i) => {
+            const input = document.getElementById(`name-${i}`);
+            if (input) input.value = name;
+          });
+          initGroup();
           renderTransactions();
           setTimeout(() => calculateBalances(), 100);
         } catch (e) {
@@ -253,7 +270,28 @@
       }
     }
 
-    window.onload = loadFromURL;
+    window.onload = function () {
+      if (!location.search.includes('data=')) {
+        members = ['Alice', 'Bob', 'Charlie'];
+        transactions = [
+          { payer: 0, amount: 30, participants: [1, 2], note: 'Dinner' },
+          { payer: 1, amount: 20, participants: [0, 2], note: 'Taxi' }
+        ];
+        document.getElementById('groupSize').value = members.length;
+        createNameInputs();
+        setTimeout(() => {
+          members.forEach((name, i) => {
+            const input = document.getElementById(`name-${i}`);
+            if (input) input.value = name;
+          });
+          initGroup();
+          renderTransactions();
+          calculateBalances();
+        }, 100);
+      } else {
+        loadFromURL();
+      }
+    };
   </script>
 </body>
 </html>
