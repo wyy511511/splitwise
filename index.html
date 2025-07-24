@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Splitwise-like AA Calculator</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
@@ -22,7 +22,9 @@
   </label>
   <button onclick="createNameInputs()">Customize Names</button>
   <button onclick="clearData()">Clear Default Data</button>
+
   <div id="nameInputs"></div>
+  <div id="accountInputs" style="margin-top: 10px;"></div>
   <button onclick="initGroup()">Initialize Group</button>
 
   <div id="groupMembers"></div>
@@ -51,6 +53,12 @@
 
   <div id="results" class="balance"></div>
 
+  <!-- ✅ Moved Up: Edit Zelle Info Section -->
+  <h3>Edit Zelle Account Info</h3>
+  <div id="zelleEditor"></div>
+  <button onclick="updateZelleInfo()">Update & Re-render</button>
+  <p id="zelleUpdateNote" style="color: red; font-weight: bold;"></p>
+
   <p style="font-size: 0.9em; margin-top: 12px; color: #444;">
     <strong>Chart background colors:</strong><br>
     <span style="background-color: rgba(200,255,200,0.3); padding: 2px 6px;">Green area (right of 0)</span>: Amount paid (you fronted)<br>
@@ -61,29 +69,31 @@
   <canvas id="pieChart"></canvas>
 
   <script>
-    let members = [];
-    let transactions = [];
+    let members = [], memberAccounts = [], transactions = [];
     let horizontalChart, pieChart;
 
     function createNameInputs() {
-      const container = document.getElementById('nameInputs');
-      container.innerHTML = '';
       const n = parseInt(document.getElementById('groupSize').value);
+      const container = document.getElementById('nameInputs');
+      const accountContainer = document.getElementById('accountInputs');
+      container.innerHTML = '';
+      accountContainer.innerHTML = '';
       for (let i = 0; i < n; i++) {
-        const input = document.createElement('input');
-        input.type = 'text';
-        input.placeholder = `Name ${i + 1}`;
-        input.id = `name-${i}`;
-        container.appendChild(input);
+        container.innerHTML += `<input type="text" placeholder="Name ${i + 1}" id="name-${i}" />`;
+        accountContainer.innerHTML += `<input type="text" placeholder="Account info for Name ${i + 1} (default: Zelle)" id="account-${i}" value="Zelle" /><br/>`;
       }
     }
 
     function initGroup() {
       const n = parseInt(document.getElementById('groupSize').value);
-      members = Array.from({ length: n }, (_, i) => {
-        const val = document.getElementById(`name-${i}`)?.value?.trim();
-        return val || `Person ${i + 1}`;
-      });
+      members = [];
+      memberAccounts = [];
+      for (let i = 0; i < n; i++) {
+        const nameVal = document.getElementById(`name-${i}`)?.value?.trim() || `Person ${i + 1}`;
+        const accountVal = document.getElementById(`account-${i}`)?.value?.trim() || 'Zelle';
+        members.push(nameVal);
+        memberAccounts.push(accountVal);
+      }
       updateMemberUI();
     }
 
@@ -93,18 +103,8 @@
       payerSel.innerHTML = '';
       participantsDiv.innerHTML = '';
       members.forEach((name, i) => {
-        const opt = document.createElement('option');
-        opt.value = i;
-        opt.textContent = name;
-        payerSel.appendChild(opt);
-
-        const checkbox = document.createElement('input');
-        checkbox.type = 'checkbox';
-        checkbox.value = i;
-        checkbox.id = `check-${i}`;
-        participantsDiv.appendChild(checkbox);
-        participantsDiv.appendChild(document.createTextNode(name));
-        participantsDiv.appendChild(document.createElement('br'));
+        payerSel.innerHTML += `<option value="${i}">${name}</option>`;
+        participantsDiv.innerHTML += `<input type="checkbox" value="${i}" id="check-${i}" /> ${name}<br/>`;
       });
     }
 
@@ -112,14 +112,8 @@
       const payer = parseInt(document.getElementById('payer').value);
       const amount = parseFloat(document.getElementById('amount').value);
       const note = document.getElementById('note').value.trim();
-      const participants = [];
-      members.forEach((_, i) => {
-        if (document.getElementById(`check-${i}`).checked) participants.push(i);
-      });
-      if (participants.length === 0 || isNaN(amount)) {
-        alert('Invalid transaction');
-        return;
-      }
+      const participants = members.map((_, i) => document.getElementById(`check-${i}`).checked ? i : -1).filter(i => i !== -1);
+      if (participants.length === 0 || isNaN(amount)) return alert('Invalid transaction');
       transactions.push({ payer, amount, participants, note });
       renderTransactions();
     }
@@ -127,25 +121,18 @@
     function renderTransactions() {
       const tDiv = document.getElementById('transactions');
       tDiv.innerHTML = '';
-      transactions.forEach((t, i) => {
-        const row = document.createElement('div');
-        row.className = 'transaction-row';
-        row.textContent = `${members[t.payer]} paid $${t.amount.toFixed(2)} for ${t.participants.map(p => members[p]).join(', ')}` +
-                          (t.note ? ` [${t.note}]` : '');
-        tDiv.appendChild(row);
+      transactions.forEach(t => {
+        tDiv.innerHTML += `<div class="transaction-row">${members[t.payer]} paid $${t.amount.toFixed(2)} for ${t.participants.map(p => members[p]).join(', ')}${t.note ? ` [${t.note}]` : ''}</div>`;
       });
     }
 
     function calculateBalances() {
       const balances = Array(members.length).fill(0);
-      const barMap = Array.from({ length: members.length }, () => []);
       const consumption = Array(members.length).fill(0);
-
+      const barMap = Array.from({ length: members.length }, () => []);
       transactions.forEach(({ payer, amount, participants }) => {
         const share = amount / participants.length;
-        members.forEach((_, i) => {
-          barMap[i].push(0);
-        });
+        members.forEach((_, i) => barMap[i].push(0));
         participants.forEach(p => {
           balances[p] -= share;
           barMap[p][barMap[p].length - 1] = -share;
@@ -160,23 +147,23 @@
         balances.map((b, i) => `${members[i]}: $${b.toFixed(2)}`).join('<br>');
 
       const pairs = minimizeTransactions(balances);
-      resultDiv.innerHTML += '<div style="background: yellow; color: red; font-weight: bold; padding: 10px; border-radius: 6px;">💰 <strong>Suggested Payments:</strong><br>' +
-        pairs.map(([from, to, amt]) => `${members[from]} pays ${members[to]}: $${amt.toFixed(2)}`).join('<br>');
+      resultDiv.innerHTML += `<div style="background: yellow; color: red; font-weight: bold; padding: 10px; border-radius: 6px;">💰 <strong>Suggested Payments:</strong><br>` +
+        pairs.map(([from, to, amt]) => `${members[from]} pays ${members[to]}: $${amt.toFixed(2)} <small>(${memberAccounts[to]})</small>`).join('<br>') +
+        '</div>';
 
-      const encoded = encodeURIComponent(JSON.stringify({ members, transactions }));
+      const encoded = encodeURIComponent(JSON.stringify({ members, transactions, memberAccounts }));
       const url = `${location.origin}${location.pathname}?data=${encoded}`;
-      const link = `<p>Shareable URL: <a href="${url}" target="_blank">${url}</a></p>`;
-      resultDiv.innerHTML += link;
+      resultDiv.innerHTML += `<p>Shareable URL: <a href="${url}" target="_blank">${url}</a></p>`;
 
       drawHorizontalChart(barMap);
       drawPieChart(consumption);
+      renderZelleEditor();
     }
 
     function drawHorizontalChart(barMap) {
       const ctx = document.getElementById('horizontalChart').getContext('2d');
       if (horizontalChart) horizontalChart.destroy();
       if (!barMap || !barMap[0]) return;
-
       const datasets = barMap[0].map((_, i) => ({
         label: `Tx ${i + 1}`,
         data: barMap.map(row => row[i] || 0),
@@ -199,22 +186,16 @@
 
       horizontalChart = new Chart(ctx, {
         type: 'bar',
-        data: {
-          labels: members,
-          datasets
-        },
+        data: { labels: members, datasets },
         options: {
           indexAxis: 'y',
           responsive: true,
           plugins: {
             title: {
               display: true,
-              text: [
-                'Per-Transaction Contribution (Stacked)',
-                'Note: Each Tx represents how the amount was split among people, not one-to-one payments.'
-              ]
+              text: ['Per-Transaction Contribution (Stacked)', 'Note: Each Tx represents how the amount was split among people, not one-to-one payments.']
             },
-            tooltip: { mode: 'index', intersect: false },
+            tooltip: { mode: 'index', intersect: false }
           },
           scales: {
             x: { stacked: true },
@@ -225,7 +206,7 @@
       });
     }
 
-    function drawPieChart(consumption) {
+    function drawPieChart(data) {
       const ctx = document.getElementById('pieChart').getContext('2d');
       if (pieChart) pieChart.destroy();
       pieChart = new Chart(ctx, {
@@ -233,7 +214,7 @@
         data: {
           labels: members,
           datasets: [{
-            data: consumption,
+            data,
             backgroundColor: members.map((_, i) => `hsl(${i * 60}, 70%, 60%)`)
           }]
         },
@@ -246,34 +227,44 @@
     }
 
     function minimizeTransactions(balances) {
-      const pos = [], neg = [];
-      balances.forEach((bal, i) => {
-        if (bal > 0.01) pos.push([i, bal]);
-        else if (bal < -0.01) neg.push([i, -bal]);
-      });
-      const result = [];
+      const pos = [], neg = [], res = [];
+      balances.forEach((b, i) => b > 0.01 ? pos.push([i, b]) : b < -0.01 && neg.push([i, -b]));
       let i = 0, j = 0;
       while (i < neg.length && j < pos.length) {
-        const minAmt = Math.min(neg[i][1], pos[j][1]);
-        result.push([neg[i][0], pos[j][0], minAmt]);
-        neg[i][1] -= minAmt;
-        pos[j][1] -= minAmt;
+        const amt = Math.min(neg[i][1], pos[j][1]);
+        res.push([neg[i][0], pos[j][0], amt]);
+        neg[i][1] -= amt; pos[j][1] -= amt;
         if (neg[i][1] < 0.01) i++;
         if (pos[j][1] < 0.01) j++;
       }
-      return result;
+      return res;
+    }
+
+    function renderZelleEditor() {
+      const container = document.getElementById('zelleEditor');
+      container.innerHTML = '';
+      members.forEach((name, i) => {
+        container.innerHTML += `<label>${name}'s Zelle: <input type="text" id="zelle-edit-${i}" value="${memberAccounts[i]}" /></label><br/>`;
+      });
+    }
+
+    function updateZelleInfo() {
+      members.forEach((_, i) => {
+        const val = document.getElementById(`zelle-edit-${i}`)?.value?.trim() || 'Zelle';
+        memberAccounts[i] = val;
+      });
+      document.getElementById('zelleUpdateNote').textContent = '✅ Zelle info updated. Please re-copy the share link.';
+      calculateBalances();
     }
 
     function clearData() {
       members = [];
+      memberAccounts = [];
       transactions = [];
       document.getElementById('groupSize').value = '';
-      document.getElementById('nameInputs').innerHTML = '';
-      document.getElementById('groupMembers').innerHTML = '';
-      document.getElementById('payer').innerHTML = '';
-      document.getElementById('participants').innerHTML = '';
-      document.getElementById('transactions').innerHTML = '';
-      document.getElementById('results').innerHTML = '';
+      ['nameInputs', 'accountInputs', 'groupMembers', 'payer', 'participants', 'transactions', 'results', 'zelleEditor', 'zelleUpdateNote'].forEach(id => {
+        document.getElementById(id).innerHTML = '';
+      });
       if (horizontalChart) horizontalChart.destroy();
       if (pieChart) pieChart.destroy();
     }
@@ -285,17 +276,18 @@
           const data = JSON.parse(decodeURIComponent(params.get('data')));
           members = data.members;
           transactions = data.transactions;
+          memberAccounts = data.memberAccounts || Array(members.length).fill('Zelle');
           document.getElementById('groupSize').value = members.length;
           createNameInputs();
           members.forEach((name, i) => {
-            const input = document.getElementById(`name-${i}`);
-            if (input) input.value = name;
+            document.getElementById(`name-${i}`).value = name;
+            document.getElementById(`account-${i}`).value = memberAccounts[i];
           });
           initGroup();
           renderTransactions();
           setTimeout(() => calculateBalances(), 100);
         } catch (e) {
-          console.error('Failed to load data from URL', e);
+          console.error('Failed to load from URL', e);
         }
       }
     }
@@ -303,6 +295,7 @@
     window.onload = function () {
       if (!location.search.includes('data=')) {
         members = ['Alice', 'Bob', 'Charlie'];
+        memberAccounts = ['alice@zelle', 'bob@zelle', 'charlie@zelle'];
         transactions = [
           { payer: 0, amount: 30, participants: [1, 2], note: 'Dinner' },
           { payer: 1, amount: 20, participants: [0, 2], note: 'Taxi' }
@@ -311,8 +304,8 @@
         createNameInputs();
         setTimeout(() => {
           members.forEach((name, i) => {
-            const input = document.getElementById(`name-${i}`);
-            if (input) input.value = name;
+            document.getElementById(`name-${i}`).value = name;
+            document.getElementById(`account-${i}`).value = memberAccounts[i];
           });
           initGroup();
           renderTransactions();
